@@ -16,6 +16,9 @@
 </head>
 <body>
 <div id="app">
+  <div class="topbar">
+    <button id="cancelBtn" class="iconbtn" aria-label="Остановить игру" title="Остановить игру">✕</button>
+  </div>
   <header>
     <div class="metric"><div id="score" class="value">0</div><div class="label">счёт</div></div>
     <div class="metric right"><div id="processed" class="value">0</div><div id="processedLabel" class="label">машин</div></div>
@@ -41,11 +44,15 @@
 
   <div id="gameover" class="gameover">
     <div class="panel">
+      <div id="gameoverReason" class="reason"></div>
       <div id="finalScore" class="final-score">0</div>
       <div class="small">счёт</div>
       <div id="finalProcessed" class="small" style="margin-top:14px">0 машин</div>
       <div id="bestScore" class="small" style="margin-top:14px">рекорд: 0 · 0 машин</div>
-      <button id="restart" class="restart">ещё раз</button>
+      <div class="gameover-actions">
+        <button id="restart" class="restart">ещё раз</button>
+        <button id="toStart" class="restart secondary">на главный</button>
+      </div>
     </div>
   </div>
 </div>

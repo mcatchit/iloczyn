@@ -246,7 +246,7 @@ function renderCapacity() {
   const total = Math.min(QUEUE_CAP, state.queue.length);
   capacityEl.innerHTML = Array.from({ length: QUEUE_CAP }, (_, i) => {
     const filled = i < total;
-    const warn = filled && total >= QUEUE_CAP - 1;
+    const warn = filled && total >= QUEUE_CAP - 2;
     return `<div class="cap-seg${filled ? ' filled' : ''}${warn ? ' warn' : ''}"></div>`;
   }).join('');
 }
@@ -290,7 +290,7 @@ function activateNext() {
 function enqueue() {
   if (state.gameOver) return;
   if (state.queue.length + (state.active ? 1 : 0) >= QUEUE_CAP) {
-    endGame();
+    endGame('queue');
     return;
   }
   state.queue.push(createCar());
@@ -341,7 +341,7 @@ function finishSwipe(dir) {
     state.active = null;
     renderCapacity();
     setTimeout(() => {
-      if (state.lives <= 0) { endGame(); return; }
+      if (state.lives <= 0) { endGame('lives'); return; }
       activateNext();
     }, 330);
   }
@@ -412,18 +412,41 @@ function loadBest() {
 // Game flow
 // ============================================================
 
-function endGame() {
+function endGame(reason) {
   state.gameOver = true;
 
   let best = loadBest();
   if (state.score > best.score) best = { score: state.score, processed: state.processed };
   localStorage.setItem('checkpointBest', JSON.stringify(best));
 
+  const reasonEl = $('gameoverReason');
+  reasonEl.textContent = reason === 'queue' ? 'очередь переполнена' : '';
+  reasonEl.classList.toggle('show', reason === 'queue');
+
   $('finalScore').textContent = state.score;
   $('finalProcessed').textContent = `${state.processed} ${carWord(state.processed)}`;
   $('bestScore').textContent = `рекорд: ${best.score} · ${best.processed} ${carWord(best.processed)}`;
   $('gameover').classList.add('show');
 }
+
+function goToStart() {
+  $('gameover').classList.remove('show');
+  $('start').classList.remove('hide');
+}
+
+function stopGame() {
+  if (state.gameOver) return;
+  state.gameOver = true;
+
+  let best = loadBest();
+  if (state.score > best.score) best = { score: state.score, processed: state.processed };
+  localStorage.setItem('checkpointBest', JSON.stringify(best));
+
+  goToStart();
+}
+
+$('cancelBtn').addEventListener('click', stopGame);
+$('toStart').addEventListener('click', goToStart);
 
 function reset() {
   state.score = 0;
@@ -437,6 +460,7 @@ function reset() {
   state.carsCreated = 0;
   state.rule = null;
   state.lives = state.maxLives;
+  spawnTimer = 0;
 
   $('gameover').classList.remove('show');
   updateHUD();
@@ -458,14 +482,18 @@ function spawnInterval() {
 }
 
 function loop(now) {
-  const dt = now - last;
+  // clamp dt so a backgrounded/paused tab (rAF stalls while hidden) can't
+  // dump a huge elapsed time into spawnTimer in one frame
+  const dt = Math.min(now - last, 250);
   last = now;
-  spawnTimer += dt;
 
-  const interval = spawnInterval();
-  if (!state.gameOver && spawnTimer >= interval) {
-    spawnTimer -= interval;
-    enqueue();
+  if (!state.gameOver) {
+    spawnTimer += dt;
+    const interval = spawnInterval();
+    if (spawnTimer >= interval) {
+      spawnTimer -= interval;
+      enqueue();
+    }
   }
   requestAnimationFrame(loop);
 }
@@ -477,10 +505,15 @@ function loop(now) {
 renderLives();
 updateHUD();
 
+let loopRunning = false;
+
 $('startBtn').addEventListener('click', () => {
   $('start').classList.add('hide');
   reset();
-  last = performance.now();
-  spawnTimer = 0;
-  requestAnimationFrame(loop);
+  if (!loopRunning) {
+    loopRunning = true;
+    last = performance.now();
+    spawnTimer = 0;
+    requestAnimationFrame(loop);
+  }
 });
