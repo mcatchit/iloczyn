@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+<title>Iloczyn</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="metric"><div id="score" class="value">0</div><div class="label">счёт</div></div>
+    <div class="metric right"><div id="processed" class="value">0</div><div id="processedLabel" class="label">машин</div></div>
+  </header>
+
+  <div id="lives" class="lives"></div>
+
+  <section class="rule">
+    <div class="rule-label">правило</div>
+    <div id="rule" class="rule-value">&gt; 4</div>
+  </section>
+
+  <main id="stage" class="stage">
+    <div id="leftMark" class="side-mark left">✕</div>
+    <div id="rightMark" class="side-mark right">✓</div>
+    <div id="toast" class="toast"></div>
+    <div id="checkpoint" class="checkpoint"></div>
+    <div id="queueArea" class="queue-area">
+      <div id="capacity" class="capacity"></div>
+      <div id="queue" class="queue"></div>
+    </div>
+  </main>
+
+  <div id="gameover" class="gameover">
+    <div class="panel">
+      <div id="finalScore" class="final-score">0</div>
+      <div class="small">счёт</div>
+      <div id="finalProcessed" class="small" style="margin-top:14px">0 машин</div>
+      <div id="bestScore" class="small" style="margin-top:14px">рекорд: 0 · 0 машин</div>
+      <button id="restart" class="restart">ещё раз</button>
+    </div>
+  </div>
+</div>
+<div id="start" class="start">
+  <div class="panel">
+    <img class="start-icon" src="queue_car.svg" alt="" draggable="false">
+    <div class="start-title">Iloczyn</div>
+    <p class="rules-text">перемножь цифры номера</p>
+    <button id="startBtn" class="restart">начать</button>
+  </div>
+</div>
+<script src="script.js"></script>
+</body>
+</html>
