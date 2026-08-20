@@ -17,7 +17,7 @@ const state = {
   maxDigit: 3,
   maxDigitCap: 9,
   carsPerDigit: 4,
-  activeDigits: 2,
+  activeDigits: 3,
   activeDigitsCap: 5,
   carsPerActiveDigit: 3,
   gameOver: false,
@@ -111,20 +111,45 @@ const DIGIT_WEIGHT_ZERO = 1;
 const DIGIT_WEIGHT_ONE = 4;
 const DIGIT_WEIGHT_REST = 10;
 
+// even past the opening plates (see ACTIVE_DIGITS_WARMUP_CARS below), 0s and 1s
+// landing in the active slots make the product trivial (1×2). Throttle both
+// weights toward zero for the first WARMUP_CARS processed, then ramp back up
+// to the normal design weights above.
+const WARMUP_CARS = 10;
+
 function pickDigit(maxDigit) {
-  const total = DIGIT_WEIGHT_ZERO + DIGIT_WEIGHT_ONE + DIGIT_WEIGHT_REST * (maxDigit - 1);
+  const warmup = Math.min(1, state.processed / WARMUP_CARS);
+  const zeroWeight = DIGIT_WEIGHT_ZERO * warmup;
+  const oneWeight = DIGIT_WEIGHT_ONE * (0.25 + 0.75 * warmup);
+  const total = zeroWeight + oneWeight + DIGIT_WEIGHT_REST * (maxDigit - 1);
   let r = Math.random() * total;
-  if ((r -= DIGIT_WEIGHT_ZERO) < 0) return 0;
-  if ((r -= DIGIT_WEIGHT_ONE) < 0) return 1;
+  if ((r -= zeroWeight) < 0) return 0;
+  if ((r -= oneWeight) < 0) return 1;
   return 2 + Math.floor(r / DIGIT_WEIGHT_REST);
 }
 
-// each active digit is drawn independently from that weighted range, so any
-// repeat pattern can come up on its own — distinct permutations, a single pair,
-// triples like 33325, non-adjacent repeats like 23252, even 66666 on rare luck
+// each active digit is drawn independently from that weighted range, but retries
+// a few times against digits already picked — plain repeats like 21112 (2×2) or
+// 11113 (1×1) are trivial to multiply and got common enough to feel repetitive,
+// so this pushes toward distinct values (23252, 33625) while still leaving rarer
+// patterns like 33325 or 66666 possible once the retry budget runs out
 function pickActiveDigits(count, maxDigit) {
-  return Array.from({ length: count }, () => pickDigit(maxDigit));
+  const values = [];
+  for (let i = 0; i < count; i++) {
+    let v, guard = 0;
+    do { v = pickDigit(maxDigit); } while (values.includes(v) && guard++ < 3);
+    values.push(v);
+  }
+  return values;
 }
+
+// after the single-digit opener (car 1), this many plates get exactly 2 active
+// digits — a plain a×b multiplication like 12211 — before the count jumps
+// straight to 3 and stays there. Without this cap the a×b pattern kept showing
+// up for the first several plates, since activeDigits only climbs on processed
+// successes and a couple of easy plates were already queued up before that
+// caught up.
+const ACTIVE_DIGITS_WARMUP_CARS = 2;
 
 // difficulty comes from how many digits force a real multiplication step, not
 // from the final product size — 92111 (one active digit) is a single 9×2 no
@@ -207,7 +232,9 @@ function chooseRule(car) {
 
 function updateProgression() {
   state.maxDigit = Math.min(state.maxDigitCap, 3 + Math.floor(state.processed / state.carsPerDigit));
-  state.activeDigits = Math.min(state.activeDigitsCap, 2 + Math.floor(state.processed / state.carsPerActiveDigit));
+  // floor of 3 (not 2) once past the opening plates — see ACTIVE_DIGITS_WARMUP_CARS
+  // in createCar, which is what actually gates the easy 2-digit plates
+  state.activeDigits = Math.min(state.activeDigitsCap, 3 + Math.floor(state.processed / state.carsPerActiveDigit));
 }
 
 // ============================================================
@@ -216,9 +243,14 @@ function updateProgression() {
 
 function createCar() {
   state.carsCreated++;
-  // the very first car of a game is a single-digit warm-up, however many are
-  // already buffered ahead of it in the queue when this fires
-  const activeDigits = state.carsCreated === 1 ? 1 : state.activeDigits;
+  // car 1 is a single-digit warm-up, the next ACTIVE_DIGITS_WARMUP_CARS are a
+  // plain 2-digit multiplication, gated on carsCreated (not the processed-driven
+  // state.activeDigits) so it's exactly this many plates no matter how the queue
+  // is buffered ahead of it when this fires
+  let activeDigits;
+  if (state.carsCreated === 1) activeDigits = 1;
+  else if (state.carsCreated <= 1 + ACTIVE_DIGITS_WARMUP_CARS) activeDigits = 2;
+  else activeDigits = state.activeDigits;
   return {
     id: ++state.activeId,
     plate: makeNumber(activeDigits),
@@ -244,10 +276,10 @@ function renderQueue() {
 
 function renderCapacity() {
   const total = Math.min(QUEUE_CAP, state.queue.length);
+  const danger = total >= QUEUE_CAP - 2;
   capacityEl.innerHTML = Array.from({ length: QUEUE_CAP }, (_, i) => {
     const filled = i < total;
-    const warn = filled && total >= QUEUE_CAP - 2;
-    return `<div class="cap-seg${filled ? ' filled' : ''}${warn ? ' warn' : ''}"></div>`;
+    return `<div class="cap-seg${filled ? ' filled' : ''}${danger ? ' warn' : ''}"></div>`;
   }).join('');
 }
 
@@ -458,7 +490,7 @@ function reset() {
   state.active = null;
   state.gameOver = false;
   state.maxDigit = 3;
-  state.activeDigits = 2;
+  state.activeDigits = 3;
   state.carsCreated = 0;
   state.rule = null;
   state.lives = state.maxLives;
@@ -480,7 +512,7 @@ let last = performance.now();
 let spawnTimer = 0;
 
 function spawnInterval() {
-  return 6000 + (state.maxDigit - 3) * 300;
+  return 5000 + (state.maxDigit - 3) * 300;
 }
 
 function loop(now) {

@@ -1,4 +1,4 @@
-const CACHE = 'iloczyn-v2';
+const CACHE = 'iloczyn-v3';
 const ASSETS = [
   './',
   './index.html',
