@@ -5,6 +5,14 @@
 const QUEUE_CAP = 10;
 const CITY_CODES = ['WA', 'KR', 'EL', 'DW', 'GD', 'KT', 'PO', 'SK', 'ZS', 'LU'];
 
+// Belarusian plates show up as an occasional variant among the Polish ones
+const BY_PLATE_CHANCE = 0.1;
+// real plates only use letters shared by the Belarusian Cyrillic and Latin
+// alphabets — no M or Y, unlike the Russian road-alphabet set
+const BY_LETTER_CHARS = ['A', 'B', 'C', 'E', 'H', 'I', 'K', 'O', 'P', 'T', 'X'];
+// index i => region (i+1); region 3 is weighted well above the rest
+const BY_REGION_WEIGHTS = [1, 1, 5, 1, 1, 1, 1, 1];
+
 const state = {
   score: 0,
   processed: 0,
@@ -168,6 +176,29 @@ function makeNumber(activeDigits) {
   return digits.join('');
 }
 
+function pickByLetters() {
+  return BY_LETTER_CHARS[randInt(0, BY_LETTER_CHARS.length - 1)] + BY_LETTER_CHARS[randInt(0, BY_LETTER_CHARS.length - 1)];
+}
+
+function pickByRegion() {
+  const total = BY_REGION_WEIGHTS.reduce((a, b) => a + b, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < BY_REGION_WEIGHTS.length; i++) {
+    if ((r -= BY_REGION_WEIGHTS[i]) < 0) return i + 1;
+  }
+  return BY_REGION_WEIGHTS.length;
+}
+
+// Belarusian plates: 4-digit number + 2 letters + a region digit (1-8). Unlike
+// Polish plates there are no filler 1s here — all 5 digits (the 4-digit number
+// plus the region) are real values that go into the product, so a BY plate is
+// always a full 5-digit multiplication regardless of the current activeDigits ramp.
+function makeByPlate() {
+  const digits = pickActiveDigits(4, state.maxDigit);
+  const region = pickByRegion();
+  return { plate: [...digits, region].join(''), letters: pickByLetters() };
+}
+
 function product(digits) {
   return [...digits].reduce((acc, d) => acc * Number(d), 1);
 }
@@ -247,19 +278,35 @@ function createCar() {
   // plain 2-digit multiplication, gated on carsCreated (not the processed-driven
   // state.activeDigits) so it's exactly this many plates no matter how the queue
   // is buffered ahead of it when this fires
-  let activeDigits;
-  if (state.carsCreated === 1) activeDigits = 1;
-  else if (state.carsCreated <= 1 + ACTIVE_DIGITS_WARMUP_CARS) activeDigits = 2;
-  else activeDigits = state.activeDigits;
+  const pastWarmup = state.carsCreated > 1 + ACTIVE_DIGITS_WARMUP_CARS;
+
+  // BY plates always multiply all 5 digits, so they'd blow past the easy
+  // opening window — only roll for one once the PL ramp is past it too
+  if (pastWarmup && Math.random() < BY_PLATE_CHANCE) {
+    const by = makeByPlate();
+    return {
+      id: ++state.activeId,
+      plate: by.plate,
+      byLetters: by.letters,
+      country: 'BY',
+      entering: true,
+    };
+  }
+
+  const activeDigits = state.carsCreated === 1 ? 1 : pastWarmup ? state.activeDigits : 2;
   return {
     id: ++state.activeId,
     plate: makeNumber(activeDigits),
     cityCode: CITY_CODES[randInt(0, CITY_CODES.length - 1)],
+    country: 'PL',
     entering: true,
   };
 }
 
 function plateText(car) {
+  if (car.country === 'BY') {
+    return `${car.plate.slice(0, 4)} ${car.byLetters}-${car.plate.slice(4)}`;
+  }
   return `${car.cityCode} ${car.plate}`;
 }
 
@@ -283,6 +330,40 @@ function renderCapacity() {
   }).join('');
 }
 
+// five-pointed star polygon, points computed rather than hand-typed so the
+// EU ring below stays exact
+function starPolygon(cx, cy, outerR, innerR) {
+  const pts = [];
+  for (let k = 0; k < 10; k++) {
+    const angle = (-90 + k * 36) * Math.PI / 180;
+    const r = k % 2 === 0 ? outerR : innerR;
+    pts.push(`${(cx + r * Math.cos(angle)).toFixed(2)},${(cy + r * Math.sin(angle)).toFixed(2)}`);
+  }
+  return pts.join(' ');
+}
+
+// the real EU band: 12 gold stars evenly spaced around a ring, each point-up
+const EU_STARS = Array.from({ length: 12 }, (_, i) => {
+  const angle = i * 30 * Math.PI / 180;
+  const cx = 10 + 6.4 * Math.sin(angle);
+  const cy = 10 - 6.4 * Math.cos(angle);
+  return `<polygon points="${starPolygon(cx, cy, 1.7, 0.65)}" fill="#FC0"/>`;
+}).join('');
+const EU_EMBLEM_SVG = `<svg class="badge-flag" viewBox="0 0 20 20" aria-hidden="true">${EU_STARS}</svg>`;
+
+// Belarusian flag: red over green (2:1), plus the ornament stripe at the hoist,
+// simplified to a repeating row of small diamonds rather than the full weave
+const BY_ORNAMENT = Array.from({ length: 5 }, (_, i) => {
+  const cy = 0.22 + i * 0.4;
+  return `<rect x="0.09" y="${(cy - 0.09).toFixed(2)}" width="0.18" height="0.18" fill="#C8102E" transform="rotate(45 0.18 ${cy.toFixed(2)})"/>`;
+}).join('');
+const BY_FLAG_SVG = `<svg class="badge-flag" viewBox="0 0 3 2" aria-hidden="true">
+  <rect width="3" height="2" fill="#C8102E"/>
+  <rect y="1.333" width="3" height="0.667" fill="#4AA657"/>
+  <rect width="0.36" height="2" fill="#fff"/>
+  ${BY_ORNAMENT}
+</svg>`;
+
 function renderActive() {
   checkpoint.innerHTML = '';
   if (!state.active) return;
@@ -290,9 +371,13 @@ function renderActive() {
   const wrap = document.createElement('div');
   wrap.className = 'car-wrap';
   wrap.id = 'activeCar';
+  const isBy = state.active.country === 'BY';
+  const badge = isBy
+    ? `<div class="plate-badge by">${BY_FLAG_SVG}<div class="badge-code">BY</div></div>`
+    : `<div class="plate-badge eu">${EU_EMBLEM_SVG}<div class="badge-code">PL</div></div>`;
   wrap.innerHTML = `<div class="car">
     <img class="car-img" src="car.svg" alt="" draggable="false">
-    <div class="plate"><div class="plate-eu"><div class="eu-stars"></div><div class="eu-code">PL</div></div><div class="plate-number">${plateText(state.active)}</div></div>
+    <div class="plate">${badge}<div class="plate-number">${plateText(state.active)}</div></div>
   </div>`;
   checkpoint.appendChild(wrap);
   attachSwipe(wrap);

@@ -210,28 +210,41 @@ header {
   line-height: 1;
 }
 
-.plate-eu {
-  background: #036;
+.plate-badge {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 1px 4px;
-  gap: 1px;
+  gap: 0;
+  padding: 1px 2px;
 }
 
-.eu-stars {
+/* PL: real EU country-band look — dark blue strip with the 12-star ring */
+.plate-badge.eu { background: #039; }
+.plate-badge.eu .badge-flag { width: 7px; height: 7px; }
+.plate-badge.eu .badge-code { color: #fff; }
+
+/* BY: not an EU plate, so no colour band — just a small flag icon on white */
+.plate-badge.by {
+  background: #fff;
+  border-right: 1px solid var(--ink);
+}
+.plate-badge.by .badge-flag {
   width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 1.5px dotted #fc0;
+  height: 6.5px;
+  border-radius: 1px;
+  outline: .5px solid rgba(0, 0, 0, .3);
+  outline-offset: -.5px;
 }
+.plate-badge.by .badge-code { color: var(--ink); }
 
-.eu-code {
-  color: #fff;
-  font-size: 8px;
+.badge-flag { display: block; }
+
+.badge-code {
+  font-size: 5px;
   font-weight: 700;
+  letter-spacing: .02em;
   line-height: 1;
 }
 

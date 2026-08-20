@@ -1,4 +1,4 @@
-const CACHE = 'iloczyn-v3';
+const CACHE = 'iloczyn-v7';
 const ASSETS = [
   './',
   './index.html',
@@ -25,20 +25,21 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// network-first: an online reload always gets whatever's live, so a shipped
+// change shows up on the very next load instead of the one after (cache-first
+// was serving one version behind on every deploy). The cache is only there so
+// the game still opens when the player is actually offline.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const fetchPromise = fetch(event.request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(event.request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || fetchPromise;
-    })
+    fetch(event.request)
+      .then((response) => {
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
