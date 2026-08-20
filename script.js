@@ -326,8 +326,10 @@ function finishSwipe(dir) {
   if (correct) {
     state.processed++;
     state.streak++;
-    state.score += 1 + (state.streak % 5 === 0 ? 1 : 0);
-    showToast(state.streak % 5 === 0 ? 'серия +2' : '+1');
+    const streakTier = state.streak % 5 === 0 ? state.streak / 5 : 0;
+    const gain = 1 + streakTier;
+    state.score += gain;
+    showToast(streakTier ? `серия +${gain}` : '+1');
     state.active = null;
     updateProgression();
     updateHUD();
@@ -337,7 +339,7 @@ function finishSwipe(dir) {
     state.streak = 0;
     state.lives--;
     renderLives();
-    showToast('мимо', true);
+    showToast('упс...', true);
     state.active = null;
     renderCapacity();
     setTimeout(() => {
