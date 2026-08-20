@@ -34,6 +34,7 @@ const state = {
   currentX: 0,
   activeId: 0,
   carsCreated: 0,
+  lastPlateText: null,
 };
 
 // ============================================================
@@ -272,8 +273,7 @@ function updateProgression() {
 // Car queue
 // ============================================================
 
-function createCar() {
-  state.carsCreated++;
+function rollCar() {
   // car 1 is a single-digit warm-up, the next ACTIVE_DIGITS_WARMUP_CARS are a
   // plain 2-digit multiplication, gated on carsCreated (not the processed-driven
   // state.activeDigits) so it's exactly this many plates no matter how the queue
@@ -284,23 +284,33 @@ function createCar() {
   // opening window — only roll for one once the PL ramp is past it too
   if (pastWarmup && Math.random() < BY_PLATE_CHANCE) {
     const by = makeByPlate();
-    return {
-      id: ++state.activeId,
-      plate: by.plate,
-      byLetters: by.letters,
-      country: 'BY',
-      entering: true,
-    };
+    return { plate: by.plate, byLetters: by.letters, country: 'BY', entering: true };
   }
 
   const activeDigits = state.carsCreated === 1 ? 1 : pastWarmup ? state.activeDigits : 2;
   return {
-    id: ++state.activeId,
     plate: makeNumber(activeDigits),
     cityCode: CITY_CODES[randInt(0, CITY_CODES.length - 1)],
     country: 'PL',
     entering: true,
   };
+}
+
+function createCar() {
+  state.carsCreated++;
+
+  // the early digit pool is narrow (activeDigits=2, maxDigit=3), so two
+  // independent rolls land on the same-looking plate often enough to notice —
+  // retry a few times rather than show the same plate twice in a row
+  let car = rollCar();
+  let guard = 0;
+  while (plateText(car) === state.lastPlateText && guard++ < 5) {
+    car = rollCar();
+  }
+  state.lastPlateText = plateText(car);
+
+  car.id = ++state.activeId;
+  return car;
 }
 
 function plateText(car) {
@@ -577,6 +587,7 @@ function reset() {
   state.maxDigit = 3;
   state.activeDigits = 3;
   state.carsCreated = 0;
+  state.lastPlateText = null;
   state.rule = null;
   state.lives = state.maxLives;
   spawnTimer = 0;
